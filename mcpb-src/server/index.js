@@ -47,7 +47,7 @@ function flagArgs(input, mapping) {
 const TOOLS = {
   search_reddit: {
     description:
-      "Search Reddit by keyword. Returns markdown with post titles, dates (UTC + relative), scores, comment counts, and (optionally) full body + top comments per result.",
+      "Search Reddit by keyword with optional live-status verification. By default opens every result in a headless browser to ground-truth its current status and excludes mod-removed, OP-deleted, and archived posts — so you only see threads you can actually engage with. Returns markdown with post titles, dates (UTC + relative), scores, comment counts, and (with `with_context`) full body + top N comments per result.",
     inputSchema: {
       type: "object",
       properties: {
@@ -58,9 +58,9 @@ const TOOLS = {
         limit: { type: "integer", default: 15, minimum: 1, maximum: 100 },
         via: { type: "string", enum: ["auto", "reddit", "arctic-shift"], default: "auto" },
         archived: { type: "string", enum: ["include", "exclude", "only"], default: "include" },
-        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "include", description: "Filter posts that look deleted/removed/archived via heuristic." },
-        max_age_days: { type: "integer", default: 0, description: "Treat posts older than this as likely_archived (180 = Reddit default)." },
-        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "none", description: "Open posts in headless Chromium to ground-truth status. Requires playwright + chromium." },
+        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "exclude", description: "Filter posts the system judges as non-live (heuristic + verify_live combined). 'exclude' (default) drops them; 'flag' keeps but annotates; 'only' returns only the dead ones; 'include' returns everything raw." },
+        max_age_days: { type: "integer", default: 180, description: "Treat posts older than this as likely_archived (180 = Reddit's default archive window). 0 disables this check." },
+        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "all", description: "Open each result in headless Chromium to read its real current status (deleted / removed by mods / removed by Reddit's filters / archived / live). 'all' (default) verifies every result — slow (~3s/post) but catches mod-removals invisible to the heuristic. 'suspect' verifies only heuristic-flagged posts (fast, but misses normally-scored mod-removed posts). 'none' skips verification entirely and you WILL get stale-removed posts back. Requires playwright + chromium installed." },
         with_context: { type: "integer", default: 0, description: "Inline full body + top N comments per result. 0 disables." },
       },
       required: ["query"],
@@ -111,9 +111,9 @@ const TOOLS = {
         limit: { type: "integer", default: 25 },
         via: { type: "string", enum: ["auto", "reddit", "arctic-shift"], default: "auto" },
         archived: { type: "string", enum: ["include", "exclude", "only"], default: "include" },
-        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "include" },
-        max_age_days: { type: "integer", default: 0 },
-        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "none" },
+        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "exclude", description: "Drop posts judged non-live (heuristic + verify_live combined)." },
+        max_age_days: { type: "integer", default: 180, description: "Treat posts older than this as likely_archived. 0 disables." },
+        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "all", description: "Ground-truth each result via headless browser. 'all' (default) verifies every post — catches mod-removals invisible to the heuristic. 'none' returns whatever the snapshot said. Requires playwright + chromium." },
       },
       required: ["subreddit"],
     },
@@ -142,9 +142,9 @@ const TOOLS = {
         limit: { type: "integer", default: 15 },
         via: { type: "string", enum: ["auto", "reddit", "arctic-shift"], default: "auto" },
         archived: { type: "string", enum: ["include", "exclude", "only"], default: "include" },
-        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "include" },
-        max_age_days: { type: "integer", default: 0 },
-        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "none" },
+        liveness: { type: "string", enum: ["include", "exclude", "only", "flag"], default: "exclude", description: "Drop posts/comments judged non-live (heuristic + verify_live combined)." },
+        max_age_days: { type: "integer", default: 180, description: "Treat items older than this as likely_archived. 0 disables." },
+        verify_live: { type: "string", enum: ["none", "suspect", "all"], default: "all", description: "Ground-truth each item via headless browser. 'all' (default) verifies every result. Requires playwright + chromium." },
       },
       required: ["username"],
     },
