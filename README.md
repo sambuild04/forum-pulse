@@ -1,10 +1,10 @@
-# reddit-pulse
+# forum-pulse
 
-A Reddit research tool for Claude Code and Claude Desktop. No auth, no API key. Only returns posts you can actually engage with — verified live, not just live-in-an-archive.
+A multi-source forum research tool for Claude Code and Claude Desktop. **Reddit + Hacker News today**, no auth, no API key. Only returns threads you can actually engage with — verified live, not just live-in-an-archive.
 
-The crowded part of this space — `search_posts`, `get_post`, `get_user`, `get_subreddit_feed` — is solved by [a dozen other MCP servers](https://github.com/topics/reddit-mcp). What `reddit-parser` adds is a verification pipeline tuned for *engageable* leads, not just raw post listings.
+Pass `--source reddit` (default) or `--source hn` on any of the main tools — `search`, `get_post`, `get_subreddit_feed`, `get_user_activity`. The crowded part of this space — basic search/post/user/feed — is solved by [a dozen other MCP servers](https://github.com/topics/reddit-mcp). What `forum-pulse` adds is **a verification pipeline tuned for *engageable* leads** and **a source-agnostic surface** that lets the model call the same tools across Reddit and HN.
 
-## What it does that the other Reddit MCPs don't
+## What it does that the other forum MCPs don't
 
 1. **Auto-routing between two backends.** Tries Reddit's public `.json` first. When that fails (datacenter IPs, anti-bot blocks, rate limits) it transparently falls back to [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift), a Pushshift-successor archive that mirrors r/* in near real-time. You don't have to choose.
 2. **Ground-truth status verification via Playwright.** Arctic Shift snapshots posts at creation time and never updates them — so a post that was later deleted, mod-removed, or auto-archived still looks "live" in its raw data. With `--verify-live all`, the tool opens each candidate URL in a headless Chromium and reads the actual deletion / removal / archive banner. Other no-auth Reddit clients miss this completely.
@@ -19,8 +19,8 @@ Two completely separate runtimes, two install paths. Both back the same `scripts
 ### Claude Code (CLI)
 
 ```bash
-git clone https://github.com/sambuild04/reddit-pulse.git ~/reddit-pulse
-ln -s ~/reddit-pulse ~/.claude/skills/reddit-pulse
+git clone https://github.com/sambuild04/forum-pulse.git ~/forum-pulse
+ln -s ~/forum-pulse ~/.claude/skills/forum-pulse
 ```
 
 Picked up live in the same session — no restart needed.
@@ -29,13 +29,13 @@ Picked up live in the same session — no restart needed.
 
 1. Build the bundle (one-time):
    ```bash
-   cd ~/reddit-pulse/mcpb-src
+   cd ~/forum-pulse/mcpb-src
    npm install --omit=dev
-   (cd .. && zip -rq reddit-pulse.mcpb mcpb-src -x '*.DS_Store' 'mcpb-src/node_modules/.cache/*')
+   (cd .. && zip -rq forum-pulse.mcpb mcpb-src -x '*.DS_Store' 'mcpb-src/node_modules/.cache/*')
    ```
 2. Open the `.mcpb` with Claude.app:
    ```bash
-   open -a Claude ~/reddit-pulse/reddit-pulse.mcpb
+   open -a Claude ~/forum-pulse/forum-pulse.mcpb
    ```
 3. In the install dialog, set Python path. Default `/usr/bin/python3` works on macOS for everything except `verify_live`. For Playwright, use whichever Python actually has it (`python3 -c 'import playwright; print(__import__("sys").executable)'`).
 
@@ -121,11 +121,13 @@ render markdown
 ## Files
 
 ```
-reddit-pulse/
+forum-pulse/
 ├── README.md                   # this file
 ├── SKILL.md                    # Claude Code skill manifest (markdown)
 ├── scripts/
-│   └── reddit.py               # the CLI — all logic lives here
+│   └── reddit.py               # the CLI — all logic, both sources. Filename
+│                               # kept for historical continuity; handles
+│                               # Reddit + HN via --source.
 └── mcpb-src/                   # source for the Claude.app extension
     ├── manifest.json
     ├── server/index.js         # thin Node.js MCP wrapper around reddit.py

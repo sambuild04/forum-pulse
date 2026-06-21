@@ -1,14 +1,14 @@
-# Reddit Parser — Claude Desktop Extension
+# Forum Pulse — Claude Desktop Extension
 
-Parse Reddit content from Claude.app with no OAuth or API key. Routes through Reddit's public JSON or the Arctic Shift archive automatically, with optional Playwright live-verification of post status.
+Parse Reddit AND Hacker News content from Claude.app with no OAuth or API key. Pass `source: 'reddit'` (default) or `source: 'hn'` on any of the main tools. Reddit routes through public JSON or Arctic Shift with optional Playwright live-verification; HN goes through Firebase + Algolia with deleted/dead flags read straight from the API.
 
 ## Tools exposed
 
-- `search_reddit` — keyword search, subreddit-scoped or global. Supports `--with-context N` to inline body + top comments per result.
-- `get_post` — full body + nested top comments tree, by URL or bare id.
-- `get_subreddit_feed` — hot/new/top/rising listings.
-- `get_user_activity` — submissions, comments, or overview for a user.
-- `get_subreddit_rules`, `get_subreddit_about`, `get_subreddit_wiki` — subreddit metadata (Reddit-only; Arctic Shift doesn't archive these).
+- `search_reddit` — keyword search, subreddit-scoped (Reddit) or global. `source: 'hn'` searches HN via Algolia. Supports `with_context: N` to inline body + top comments per result.
+- `get_post` — full body + nested top comments tree, by URL or bare id. Works for both sources.
+- `get_subreddit_feed` — hot/new/top/rising listings. With `source: 'hn'`, also supports best/ask/show/job.
+- `get_user_activity` — submissions, comments, or overview. Works for both sources.
+- `get_subreddit_rules`, `get_subreddit_about`, `get_subreddit_wiki` — Reddit-only (HN is a single board with one [sitewide guidelines page](https://news.ycombinator.com/newsguidelines.html)).
 
 ## Requirements
 
@@ -21,7 +21,7 @@ Parse Reddit content from Claude.app with no OAuth or API key. Routes through Re
 
 ## Install
 
-1. Download / build `reddit-parser-0.5.0.mcpb`.
+1. Download / build `forum-pulse-0.6.1.mcpb` (or latest).
 2. Open Claude.app → drag the `.mcpb` file into the Extensions area, or use the Extensions installer.
 3. On the config screen, confirm your Python 3 path.
 

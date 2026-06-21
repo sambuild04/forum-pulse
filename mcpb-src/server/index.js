@@ -216,7 +216,7 @@ const TOOLS = {
 };
 
 const server = new Server(
-  { name: "reddit-parser", version: "0.5.0" },
+  { name: "forum-pulse", version: "0.6.1" },
   { capabilities: { tools: {} } },
 );
 

@@ -1,11 +1,11 @@
 ---
-name: reddit-parser
-description: Parse Reddit content with no auth and no API key, routing through Reddit's public .json endpoints OR Arctic Shift (Pushshift successor, real-time, IP-block-resistant) automatically. Handles subreddit rules, sidebar, wiki pages, individual posts with top comments, hot/new/top/rising feeds, user profiles with recent submissions and comments, and search results — subreddit-scoped or global. Outputs markdown summaries with absolute (UTC) and relative timestamps on every post and comment. Use when the user pastes a reddit.com URL, mentions an `r/<sub>` or `u/<user>`, or asks things like "what are the rules of r/X", "summarize r/X", "what's hot on r/X this week", "parse this reddit post", "show me the top comments on this thread", "what did u/X post recently", or "search reddit for X".
+name: forum-pulse
+description: Parse Reddit AND Hacker News content with no auth and no API key. Pass `--source reddit` (default) or `--source hn` to switch platforms. Reddit goes through public .json endpoints or Arctic Shift (Pushshift successor, real-time, IP-block-resistant) automatically and verifies live post status via headless Chromium. HN goes through Firebase + Algolia and reads deleted/dead flags straight from the API. Handles search, single posts with comments, subreddit/frontpage feeds, user activity, and (Reddit-only) subreddit rules, sidebar, and wiki. Outputs markdown summaries with absolute (UTC) and relative timestamps on every post and comment. Use when the user pastes a reddit.com or news.ycombinator.com URL, mentions an `r/<sub>` or `u/<user>` or an HN handle, or asks things like "what are the rules of r/X", "summarize r/X", "what's hot on HN", "parse this reddit post", "what's on the HN frontpage", "show me top comments on this thread", "what did u/X post recently", "search HN for X", or "search reddit for X".
 ---
 
-# reddit-parser
+# forum-pulse
 
-Parses Reddit via two backends with automatic routing:
+Parses Reddit and Hacker News content. Pick the source with `--source {reddit,hn}` (default: `reddit`). Reddit uses two backends with automatic routing:
 
 - **Reddit's `.json` endpoints** (`www.reddit.com`): authoritative, supports everything, but blocks datacenter/sandbox/VPN IPs and rate-limits aggressively.
 - **Arctic Shift** (`arctic-shift.photon-reddit.com`): community-run real-time Reddit archive. Works from blocked IPs, no auth, but only covers posts and comments — not subreddit metadata, wiki, or Reddit-computed feed rankings (hot/top/rising).
@@ -145,5 +145,5 @@ Reddit's unauthenticated endpoints allow roughly 10 requests/minute per IP. On H
 - **HTTP 403 from every endpoint** usually means Reddit is blocking the *requesting IP* (common on datacenter, VPN, CI, or sandbox IPs), not that the sub is private. Retry from a normal residential connection. If 403s persist there too, the sub is genuinely private/banned/quarantined — or it's time to switch to OAuth.
 - Deleted users/posts return 404.
 - The `post` command takes a URL or a bare post id (e.g. `abc123`). It returns top `--limit` comments at `--depth` nesting (defaults 20 / 2). Bigger numbers can balloon output.
-- The User-Agent header is set to `reddit-parser-skill/0.1` — Reddit blocks the default Python UA, so don't strip it if you edit the script.
+- The User-Agent header is set to `reddit-parser-skill/0.x` (kept for historical continuity) — Reddit blocks the default Python UA, so don't strip it if you edit the script.
 - The `.json` endpoints don't expose every field of the official API (e.g. no modmail, no private wiki). For that you'd need OAuth, which this skill deliberately avoids.

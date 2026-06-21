@@ -1,7 +1,7 @@
 {
-  "name": "reddit-parser-mcpb",
-  "version": "0.6.0",
-  "description": "MCP server wrapping the reddit-parser Python CLI for Claude Desktop.",
+  "name": "forum-pulse-mcpb",
+  "version": "0.6.1",
+  "description": "MCP server for Forum Pulse — Reddit + Hacker News research from Claude Desktop, no auth required.",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
