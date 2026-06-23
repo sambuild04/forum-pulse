@@ -1056,14 +1056,29 @@ def cmd_search(args):
     via = pick_via(args, "search")
     children = None
 
+    # Arctic Shift's text search requires a subreddit (or author). With no
+    # subreddit the API returns 400, so skip arctic-shift entirely and route
+    # straight to Reddit's /search.json — which itself is usually IP-blocked,
+    # but at least the error path is cleaner.
+    if via == "arctic-shift" and not sub_norm:
+        if args.via == "auto":
+            via = "reddit"
+        else:
+            die(
+                "search: Arctic Shift requires a `subreddit` (or `author`) for text search.\n"
+                "Either:\n"
+                "  - Pass --sub <name> (e.g. SaaS, sysadmin, productivity)\n"
+                "  - Switch source: --source hn  (Hacker News supports global text search)\n"
+                "  - Drop --via arctic-shift to let `auto` try Reddit (often blocked too)"
+            )
+
     if via == "arctic-shift":
         params = {
             "query": args.query,
             "limit": min(args.limit, 100),
             "sort": "desc",
+            "subreddit": sub_norm,
         }
-        if sub_norm:
-            params["subreddit"] = sub_norm
         after = arctic_after_from_t(args.t)
         if after:
             params["after"] = after
@@ -1083,7 +1098,23 @@ def cmd_search(args):
             path = f"/r/{sub_norm}/search"
         else:
             path = "/search"
-        j = fetch_reddit(path, params)
+        try:
+            j = fetch_reddit(path, params)
+        except SystemExit:
+            # fetch_reddit calls die() on 403/4xx, which raises SystemExit. Re-raise
+            # but only after enriching the message when this was a global search that
+            # arctic-shift couldn't serve and Reddit then blocked.
+            if not sub_norm:
+                die(
+                    f"search: both backends refused this query.\n"
+                    f"  - Arctic Shift can't do global text search (needs a subreddit).\n"
+                    f"  - Reddit's /search.json blocked this request (HTTP 403, common from\n"
+                    f"    datacenter / VPN / shared / sandbox IPs and increasingly residential).\n"
+                    f"Try:\n"
+                    f"  - Specify a subreddit (--sub SaaS, --sub sysadmin, etc.)\n"
+                    f"  - Switch source: --source hn  (HN supports global text search natively)"
+                )
+            raise
         children = j["data"]["children"]
 
     children = filter_archived(children, args.archived)

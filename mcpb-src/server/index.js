@@ -47,7 +47,8 @@ function flagArgs(input, mapping) {
 const TOOLS = {
   search_reddit: {
     description:
-      "Search Reddit by keyword with optional live-status verification. By default opens every result in a headless browser to ground-truth its current status and excludes mod-removed, OP-deleted, and archived posts — so you only see threads you can actually engage with. Returns markdown with post titles, dates (UTC + relative), scores, comment counts, and (with `with_context`) full body + top N comments per result.",
+      "Search Reddit or Hacker News by keyword. Defaults open every result in a headless browser to ground-truth current status and exclude mod-removed, OP-deleted, and archived posts. Returns markdown with titles, dates, scores, comment counts, and (with `with_context`) full body + top N comments per result. " +
+      "IMPORTANT for source='reddit': you MUST pass `subreddit` for it to work reliably — Arctic Shift's text search requires a subreddit (returns 400 without one), and Reddit's global /search.json is bot-blocked from most networks. For a global / cross-subreddit search, use `source: 'hn'` instead (Hacker News supports unconstrained text search natively).",
     inputSchema: {
       type: "object",
       properties: {
@@ -216,7 +217,7 @@ const TOOLS = {
 };
 
 const server = new Server(
-  { name: "forum-pulse", version: "0.6.2" },
+  { name: "forum-pulse", version: "0.6.3" },
   { capabilities: { tools: {} } },
 );
 
