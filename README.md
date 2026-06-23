@@ -12,6 +12,23 @@ Pass `--source reddit` (default) or `--source hn` on any of the main tools — `
 
 The intended use case is buyer-research / customer-discovery hunting in subreddits — finding humans you can actually DM today, not threads from 8 months ago that no longer accept comments.
 
+## Sub-skill: `leverage-finder`
+
+`forum-pulse` is a tool layer (Reddit + HN). On top of it, the repo ships a **workflow skill** at [`skills/leverage-finder/SKILL.md`](skills/leverage-finder/SKILL.md) that bakes in a composite outreach-hunting workflow:
+
+- Take a project description (or README) as input
+- Profile the project, pick relevant amplifier categories from a built-in table (founder peers, AI-tools newsletters, Reddit/HN power users, niche YouTubers, accessibility advocates, language-immersion creators, competitor-switcher communities, discovery channels)
+- Run parallel `search_reddit` (Reddit + HN) calls plus `WebSearch` calls for each selected category
+- Output a tiered deck split into **Founder Peers / Buyers / Amplifiers / Discovery Channels**, with live verified URLs for every Reddit/HN candidate
+
+Install in Claude Code:
+
+```bash
+ln -s ~/forum-pulse/skills/leverage-finder ~/.claude/skills/leverage-finder
+```
+
+Install in Claude Desktop: paste the contents of `skills/leverage-finder/SKILL.md` into the **Skills → +** form (Claude.app's MCP extension format doesn't carry markdown skills, so this step is manual). After that, the skill is available via the Skill tool just like any built-in.
+
 ## Install
 
 Two completely separate runtimes, two install paths. Both back the same `scripts/reddit.py`.

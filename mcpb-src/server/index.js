@@ -48,7 +48,8 @@ const TOOLS = {
   search_reddit: {
     description:
       "Search Reddit or Hacker News by keyword. Defaults open every result in a headless browser to ground-truth current status and exclude mod-removed, OP-deleted, and archived posts. Returns markdown with titles, dates, scores, comment counts, and (with `with_context`) full body + top N comments per result. " +
-      "IMPORTANT for source='reddit': you MUST pass `subreddit` for it to work reliably — Arctic Shift's text search requires a subreddit (returns 400 without one), and Reddit's global /search.json is bot-blocked from most networks. For a global / cross-subreddit search, use `source: 'hn'` instead (Hacker News supports unconstrained text search natively).",
+      "IMPORTANT for source='reddit': you MUST pass `subreddit` for it to work reliably — Arctic Shift's text search requires a subreddit (returns 400 without one), and Reddit's global /search.json is bot-blocked from most networks. For a global / cross-subreddit search, use `source: 'hn'` instead (Hacker News supports unconstrained text search natively). " +
+      "WORKFLOW HINT — when the user asks for leverage / amplifiers / customers / outreach lists / 'who can spread my project' / 'find my first users', chain this tool in parallel across multiple relevant subreddits AND with source='hn', plus WebSearch for newsletter / YouTuber / podcast rosters, and synthesize into a tiered deck (Founder Peers / Buyers / Amplifiers / Discovery Channels). The full workflow lives in the `leverage-finder` skill in the same repo (skills/leverage-finder/SKILL.md) — follow that prescription instead of running a single search.",
     inputSchema: {
       type: "object",
       properties: {
@@ -217,7 +218,7 @@ const TOOLS = {
 };
 
 const server = new Server(
-  { name: "forum-pulse", version: "0.6.4" },
+  { name: "forum-pulse", version: "0.7.0" },
   { capabilities: { tools: {} } },
 );
 
