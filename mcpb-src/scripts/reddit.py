@@ -25,10 +25,15 @@ ARCTIC = "https://arctic-shift.photon-reddit.com"
 HN_FIREBASE = "https://hacker-news.firebaseio.com/v0"
 HN_ALGOLIA = "https://hn.algolia.com/api/v1"
 
-# Source-specific permalink base for rendering.
+# Source-specific permalink base for rendering. Empty string means the source's
+# adapter already puts a full URL in `permalink` (YouTube / GitHub / Exa) and the
+# renderer should emit it as-is without a prefix.
 PERMALINK_BASE = {
     "reddit": "https://www.reddit.com",
     "hn": "https://news.ycombinator.com",
+    "youtube": "",
+    "github": "",
+    "exa": "",
 }
 
 
@@ -310,6 +315,288 @@ def hn_fetch_post(target, comment_limit, depth):
 
     comments = fetch_kids(post.get("_kids", []), 0)
     return post, comments
+
+
+# ---------------------------------------------------------------------------
+# YouTube adapter — shells out to yt-dlp for search + metadata. No auth needed
+# for public search; transcripts are pulled lazily by cmd_post when requested.
+# ---------------------------------------------------------------------------
+
+def _shell_json_lines(cmd, timeout=60, what="command"):
+    """Run a shell command and yield parsed JSON per stdout line. Dies cleanly
+    on FileNotFoundError so the user gets an install hint."""
+    import subprocess
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        die(f"{what}: required CLI not found on PATH ({cmd[0]}).")
+    except subprocess.TimeoutExpired:
+        die(f"{what}: timed out after {timeout}s ({cmd[0]})")
+    if result.returncode != 0:
+        die(f"{what} exited {result.returncode}: {(result.stderr or result.stdout)[:300]}")
+    items = []
+    for line in result.stdout.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return items
+
+
+def _parse_yyyymmdd(s):
+    """yt-dlp's upload_date format → unix epoch seconds. Returns None on parse failure."""
+    if not s or len(s) != 8 or not s.isdigit():
+        return None
+    try:
+        dt = datetime.strptime(s, "%Y%m%d").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except ValueError:
+        return None
+
+
+def youtube_to_data(item):
+    """Convert one yt-dlp video dict to Reddit-listing data shape."""
+    return {
+        "id": str(item.get("id") or item.get("display_id") or ""),
+        "title": item.get("title") or "(untitled)",
+        "selftext": (item.get("description") or "")[:2000],
+        "body": "",
+        "author": item.get("uploader") or item.get("channel") or "[unknown channel]",
+        "score": item.get("view_count") or 0,
+        "num_comments": item.get("comment_count") or 0,
+        "created_utc": _parse_yyyymmdd(item.get("upload_date")) or item.get("timestamp"),
+        "url": item.get("webpage_url") or item.get("original_url"),
+        "permalink": item.get("webpage_url") or item.get("original_url") or f"https://www.youtube.com/watch?v={item.get('id')}",
+        "subreddit": item.get("channel") or item.get("uploader") or "YouTube",
+        "channel_url": item.get("channel_url") or item.get("uploader_url"),
+        "duration": item.get("duration"),
+        "archived": False,
+        "_source": "youtube",
+    }
+
+
+def youtube_search(query, limit=15, t="all"):
+    """Search YouTube via yt-dlp. Returns Reddit-shaped children list.
+
+    yt-dlp's `ytsearchN:query` does a Search-flavored result list with full
+    metadata per video. We pass --flat-playlist=no implicitly so every entry
+    is its own full JSON record.
+    """
+    n = min(max(limit, 1), 50)
+    cmd = [
+        "yt-dlp", f"ytsearch{n}:{query}",
+        "--dump-json", "--skip-download", "--no-warnings", "--ignore-errors",
+    ]
+    if t and t != "all":
+        # crude time filter — yt-dlp has --dateafter/--datebefore in YYYYMMDD
+        delta = _TIME_WINDOWS.get(t)
+        if delta:
+            since = datetime.now(timezone.utc) - __import__("datetime").timedelta(seconds=delta)
+            cmd += ["--dateafter", since.strftime("%Y%m%d")]
+    items = _shell_json_lines(cmd, timeout=90, what="yt-dlp")
+    return [{"kind": "t3", "data": youtube_to_data(it)} for it in items]
+
+
+# ---------------------------------------------------------------------------
+# GitHub adapter — uses `gh api` so auth is whatever `gh auth status` says.
+# Read-only access to public repos works without any token at all, but having
+# `gh auth login` done lifts the rate limit from 60/h to 5000/h.
+# ---------------------------------------------------------------------------
+
+def github_repo_to_data(repo):
+    """Convert one GitHub repo dict to Reddit-listing data shape."""
+    owner_login = (repo.get("owner") or {}).get("login") or "[unknown]"
+    return {
+        "id": str(repo.get("id") or ""),
+        "title": repo.get("full_name") or repo.get("name") or "(unnamed repo)",
+        "selftext": repo.get("description") or "",
+        "body": "",
+        "author": owner_login,
+        "score": repo.get("stargazers_count") or 0,
+        "num_comments": (repo.get("open_issues_count") or 0),
+        "created_utc": _parse_iso_to_epoch(repo.get("pushed_at") or repo.get("updated_at") or repo.get("created_at")),
+        "url": repo.get("homepage") or repo.get("html_url"),
+        "permalink": repo.get("html_url") or "",
+        "subreddit": owner_login,
+        "language": repo.get("language"),
+        "forks": repo.get("forks_count") or 0,
+        "archived": bool(repo.get("archived")),
+        "_source": "github",
+    }
+
+
+def _parse_iso_to_epoch(s):
+    if not s:
+        return None
+    try:
+        # Handle both 2026-06-23T01:23:45Z and with offset.
+        s2 = s.rstrip("Z").replace("Z", "")
+        dt = datetime.fromisoformat(s2).replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except Exception:
+        return None
+
+
+def github_search(query, limit=15, sort="stars"):
+    """Search GitHub repos via `gh api`. Returns Reddit-shaped children list.
+
+    `sort` accepts the GitHub repo-search options: stars / forks / updated /
+    help-wanted-issues / best-match (empty string, the default).
+    """
+    import subprocess
+    n = min(max(limit, 1), 100)
+    sort_param = "" if sort in ("relevance", "best-match") else sort
+    q = urllib.parse.urlencode({"q": query, "per_page": n, "sort": sort_param, "order": "desc"})
+    cmd = ["gh", "api", "-X", "GET", f"search/repositories?{q}"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        die("gh CLI not found. Install: `brew install gh` and run `gh auth login` for higher rate limits.")
+    if result.returncode != 0:
+        die(f"gh search/repositories failed: {(result.stderr or result.stdout)[:300]}")
+    try:
+        j = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        die("gh returned non-JSON output")
+    items = j.get("items") or []
+    return [{"kind": "t3", "data": github_repo_to_data(r)} for r in items]
+
+
+def github_stargazers(owner_repo, limit=30):
+    """List stargazers of a specific repo. Returns Reddit-shaped children list
+    where each item represents a verified-interested human (the rarest, most
+    actionable amplifier signal we can get without scraping)."""
+    import subprocess
+    n = min(max(limit, 1), 100)
+    cmd = ["gh", "api", "-X", "GET",
+           f"repos/{owner_repo}/stargazers?per_page={n}",
+           "-H", "Accept: application/vnd.github.star+json"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        die("gh CLI not found. Install: `brew install gh`.")
+    if result.returncode != 0:
+        die(f"gh stargazers failed: {(result.stderr or result.stdout)[:300]}")
+    try:
+        j = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        die("gh returned non-JSON output")
+    out = []
+    for s in j:
+        user = s.get("user") or {}
+        starred_at = s.get("starred_at")
+        login = user.get("login") or "[unknown]"
+        out.append({"kind": "t3", "data": {
+            "id": str(user.get("id") or ""),
+            "title": f"⭐ {login} starred {owner_repo}",
+            "selftext": user.get("bio") or "",
+            "body": "",
+            "author": login,
+            "score": 1,
+            "num_comments": 0,
+            "created_utc": _parse_iso_to_epoch(starred_at),
+            "url": user.get("html_url"),
+            "permalink": user.get("html_url") or f"https://github.com/{login}",
+            "subreddit": owner_repo,
+            "archived": False,
+            "_source": "github",
+        }})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Exa adapter — semantic web search. Requires EXA_API_KEY env var.
+# Free tier: https://exa.ai
+# ---------------------------------------------------------------------------
+
+EXA_BASE = "https://api.exa.ai"
+
+
+def exa_result_to_data(r):
+    """Convert one Exa search result to Reddit-listing data shape."""
+    text = ""
+    if isinstance(r.get("text"), str):
+        text = r["text"][:1500]
+    elif isinstance(r.get("text"), dict):
+        text = (r["text"].get("text") or "")[:1500]
+    return {
+        "id": r.get("id") or r.get("url") or "",
+        "title": r.get("title") or "(no title)",
+        "selftext": text,
+        "body": "",
+        "author": r.get("author") or _domain_of(r.get("url", "")),
+        "score": int((r.get("score") or 0) * 100),  # Exa score is 0..1; scale for display
+        "num_comments": 0,
+        "created_utc": _parse_iso_to_epoch(r.get("publishedDate")),
+        "url": r.get("url"),
+        "permalink": r.get("url") or "",
+        "subreddit": _domain_of(r.get("url", "")) or "Web",
+        "archived": False,
+        "_source": "exa",
+    }
+
+
+def _domain_of(url):
+    if not url:
+        return ""
+    try:
+        return urllib.parse.urlparse(url).netloc.replace("www.", "")
+    except Exception:
+        return ""
+
+
+def exa_search(query, limit=10, t="all"):
+    """Semantic web search via Exa API.
+
+    Better than keyword search for queries like 'top {niche} YouTubers 2026'
+    because Exa ranks by semantic similarity to the intent — listicles and
+    round-ups bubble up even when their titles don't contain every keyword.
+    """
+    import os
+    key = (os.environ.get("EXA_API_KEY") or "").strip()
+    if not key:
+        die(
+            "exa: EXA_API_KEY env var not set.\n"
+            "Get a free key at https://exa.ai (free tier covers light usage).\n"
+            "Then: export EXA_API_KEY=<key>"
+        )
+    n = min(max(limit, 1), 25)
+    payload = {
+        "query": query,
+        "numResults": n,
+        "type": "auto",
+        "contents": {"text": {"maxCharacters": 800}},
+    }
+    if t and t != "all":
+        delta = _TIME_WINDOWS.get(t)
+        if delta:
+            since = datetime.now(timezone.utc) - __import__("datetime").timedelta(seconds=delta)
+            payload["startPublishedDate"] = since.strftime("%Y-%m-%d")
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{EXA_BASE}/search",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "User-Agent": UA,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = e.read().decode("utf-8")[:300]
+        except Exception:
+            err_body = ""
+        die(f"Exa HTTP {e.code}: {err_body}")
+    except urllib.error.URLError as e:
+        die(f"Exa network error: {e}")
+    return [{"kind": "t3", "data": exa_result_to_data(r)} for r in (data.get("results") or [])]
 
 
 def render_comment_tree(children, max_depth, body_chars=500):
@@ -609,7 +896,8 @@ def _render_items(out, children, args, source="reddit"):
     so the HN and Reddit paths share rendering code instead of duplicating it.
     """
     url_base = PERMALINK_BASE.get(source, PERMALINK_BASE["reddit"])
-    author_pre = "" if source == "hn" else "u/"
+    author_pre_map = {"reddit": "u/", "hn": "", "youtube": "", "github": "@", "exa": ""}
+    author_pre = author_pre_map.get(source, "")
     for c in children:
         d = c["data"]
         tag = " 📦" if d.get("archived") else ""
@@ -617,10 +905,21 @@ def _render_items(out, children, args, source="reddit"):
             status, _ = c["_liveness"]
             if status != "live":
                 tag += f" `[{status}]`"
-        sub_label = "HN" if source == "hn" else f"r/{d.get('subreddit', '?')}"
+        if source == "hn":
+            sub_label = "HN"
+        elif source == "youtube":
+            sub_label = f"YT/{d.get('subreddit', '?')}"
+        elif source == "github":
+            sub_label = f"GH/{d.get('subreddit', '?')}"
+        elif source == "exa":
+            sub_label = d.get("subreddit") or "Web"
+        else:
+            sub_label = f"r/{d.get('subreddit', '?')}"
+        score_label = "score" if source != "youtube" else "views"
+        comments_part = f" • {d.get('num_comments', 0)} comments" if source not in ("youtube", "exa") else ""
         out.append(f"## {d['title']}{tag}")
         out.append(
-            f"{sub_label} • by {author_pre}{d['author']} • score {d.get('score', 0)} • {d.get('num_comments', 0)} comments • {fmt_when(d['created_utc'])}"
+            f"{sub_label} • by {author_pre}{d['author']} • {score_label} {d.get('score', 0)}{comments_part} • {fmt_when(d['created_utc'])}"
         )
         out.append(f"{url_base}{d['permalink']}")
         if source == "hn" and d.get("url"):
@@ -1065,7 +1364,8 @@ def cmd_user(args):
 
 
 def cmd_search(args):
-    # Source dispatch: HN uses its own API stack, no backend routing or Playwright.
+    # Source dispatch. Each non-reddit source has its own API stack and skips
+    # the Arctic-Shift / Playwright pipeline (their APIs return status directly).
     if args.source == "hn":
         children = hn_search(args.query, sort=args.sort, limit=args.limit, t=args.t)
         children = filter_archived(children, args.archived)
@@ -1076,6 +1376,37 @@ def cmd_search(args):
             header += f", liveness={args.liveness}"
         out = [header, ""]
         _render_items(out, children, args, source="hn")
+        print("\n".join(out))
+        return
+
+    if args.source == "youtube":
+        children = youtube_search(args.query, limit=args.limit, t=args.t)
+        children = filter_by_liveness(annotate_liveness(children, None), args.liveness)
+        header = f"# YouTube search: {args.query} — via yt-dlp"
+        out = [header, ""]
+        _render_items(out, children, args, source="youtube")
+        print("\n".join(out))
+        return
+
+    if args.source == "github":
+        # GitHub repo-search sort: stars / forks / updated / help-wanted-issues / relevance.
+        gh_sort = "stars" if args.sort in ("relevance", "hot", "top") else (
+            "updated" if args.sort == "new" else "stars"
+        )
+        children = github_search(args.query, limit=args.limit, sort=gh_sort)
+        children = filter_by_liveness(annotate_liveness(children, args.max_age_days or None), args.liveness)
+        header = f"# GitHub repo search: {args.query} — via gh CLI (sort={gh_sort})"
+        out = [header, ""]
+        _render_items(out, children, args, source="github")
+        print("\n".join(out))
+        return
+
+    if args.source == "exa":
+        children = exa_search(args.query, limit=args.limit, t=args.t)
+        children = filter_by_liveness(annotate_liveness(children, None), args.liveness)
+        header = f"# Exa semantic web search: {args.query}"
+        out = [header, ""]
+        _render_items(out, children, args, source="exa")
         print("\n".join(out))
         return
 
@@ -1196,7 +1527,7 @@ def main():
 
     source_parent = argparse.ArgumentParser(add_help=False)
     source_parent.add_argument(
-        "--source", choices=["reddit", "hn"], default="reddit",
+        "--source", choices=["reddit", "hn", "youtube", "github", "exa"], default="reddit",
         help="which platform to query. 'reddit' (default) uses Reddit + Arctic Shift. "
              "'hn' uses Hacker News's Firebase + Algolia APIs (no auth, no Playwright needed — "
              "deleted/dead flags come straight from the API). rules/about/wiki commands are "

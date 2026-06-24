@@ -48,12 +48,13 @@ const TOOLS = {
   search_reddit: {
     description:
       "Search Reddit or Hacker News by keyword. Defaults open every result in a headless browser to ground-truth current status and exclude mod-removed, OP-deleted, and archived posts. Returns markdown with titles, dates, scores, comment counts, and (with `with_context`) full body + top N comments per result. " +
-      "IMPORTANT for source='reddit': you MUST pass `subreddit` for it to work reliably — Arctic Shift's text search requires a subreddit (returns 400 without one), and Reddit's global /search.json is bot-blocked from most networks. For a global / cross-subreddit search, use `source: 'hn'` instead (Hacker News supports unconstrained text search natively). " +
-      "WORKFLOW HINT — when the user asks for leverage / amplifiers / customers / outreach lists / 'who can spread my project' / 'find my first users', chain this tool in parallel across multiple relevant subreddits AND with source='hn', plus WebSearch for newsletter / YouTuber / podcast rosters, and synthesize into a tiered deck (Founder Peers / Buyers / Amplifiers / Discovery Channels). The full workflow lives in the `leverage-finder` skill in the same repo (skills/leverage-finder/SKILL.md) — follow that prescription instead of running a single search.",
+      "Sources available: 'reddit', 'hn' (Hacker News), 'youtube' (yt-dlp shell-out, finds niche creators + channels), 'github' (gh CLI, finds peer projects + their owners — single best founder-peer signal), 'exa' (semantic web search, beats keyword for 'top X creators' listicles; requires EXA_API_KEY env var). " +
+      "IMPORTANT for source='reddit': you MUST pass `subreddit` — Arctic Shift's text search requires a subreddit (400 without one) and Reddit's global /search.json is bot-blocked. For global / cross-subreddit search use source='hn'. For founder peers use source='github'. For niche creators use source='youtube'. For newsletter / 'top X' round-ups use source='exa'. " +
+      "WORKFLOW HINT — when the user asks for leverage / amplifiers / customers / outreach lists / 'who can spread my project' / 'find my first users', chain this tool in parallel across MULTIPLE sources at once (typically: github for peer projects, hn for global discussion, several reddit subreddits, youtube for niche creators, exa for newsletter/podcast/YouTube round-ups) and synthesize into a tiered deck (Founder Peers / Buyers / Amplifiers / Discovery Channels). The full workflow lives in the `leverage-finder` skill (skills/leverage-finder/SKILL.md) — follow it instead of running a single search.",
     inputSchema: {
       type: "object",
       properties: {
-        source: { type: "string", enum: ["reddit", "hn"], default: "reddit", description: "Which platform to search. 'reddit' (default) uses Reddit's JSON / Arctic Shift. 'hn' uses Hacker News's Algolia search. When 'hn', `subreddit` is ignored and `verify_live` is skipped (HN's API returns deleted/dead flags directly)." },
+        source: { type: "string", enum: ["reddit", "hn", "youtube", "github", "exa"], default: "reddit", description: "Which platform to search. 'reddit' (default) — needs a subreddit. 'hn' — global Hacker News. 'youtube' — niche video creators (uses yt-dlp). 'github' — peer projects, owners are candidate founder peers (uses gh CLI). 'exa' — semantic web search for round-ups / newsletter rosters (needs EXA_API_KEY env var). All non-Reddit sources skip Arctic Shift + Playwright; status comes from each source's API directly." },
         query: { type: "string", description: "Search keywords" },
         subreddit: { type: "string", description: "Restrict to a subreddit (Reddit only — ignored if source='hn')" },
         sort: { type: "string", enum: ["relevance", "hot", "top", "new", "comments"], default: "relevance" },
@@ -218,7 +219,7 @@ const TOOLS = {
 };
 
 const server = new Server(
-  { name: "forum-pulse", version: "0.7.0" },
+  { name: "forum-pulse", version: "0.8.0" },
   { capabilities: { tools: {} } },
 );
 

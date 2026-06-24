@@ -40,20 +40,20 @@ Render a quick candidate profile so the user can correct anything before you spe
 
 Run through this table and select what's relevant to the project. Don't run all of them — pick the 4–7 with the strongest fit. Recording why a category was skipped is fine.
 
-| Category | Where they live | Scan rule |
+| Category | Source(s) | Scan rule |
 |---|---|---|
-| **Founder peers (Tier S — interview, not pitch)** | r/macapps, r/SaaS, r/indiehackers, HN Show HN, Lobsters | "Posted similar product in past year. Active in same subreddit. Open-source preferred if your project is." |
-| **AI-tools discovery channels** | TLDR AI, Ben's Bites, Future Tools, TAAFT, Ahead of AI, Interconnects, Import AI, The Batch, Superhuman AI, The Rundown AI, Simon Willison's Weblog | WebSearch round-ups, then cross-reference with project's specific angle (novelty? open source? agentic?). |
-| **Reddit power users in target subreddits** | Subreddit-by-subreddit Forum Pulse search | Commenters/posters who responded substantively in the last year on threads about your competitors or methodology. |
-| **HN regulars discussing competitors** | Forum Pulse HN search for each competitor name | Posters with substantive comments, especially "I switched from X to Y because..." pattern. |
-| **Niche YouTubers** | WebSearch + manual cross-check | "top {niche} YouTubers {current_year}" — language learning, Mac power user, Apple ecosystem, AI agents, productivity, accessibility, sales coaching. |
-| **Niche podcast hosts** | Spotify / Apple Podcasts via WebSearch | "top {niche} podcasts {current_year}". |
-| **Newsletter writers in the niche** | WebSearch | "best {niche} newsletter {current_year}". Specifically: founder/indie-hacker, AI tools, accessibility, language. |
-| **Accessibility advocates** | r/Blind, r/Accessibility, r/RSI, r/disability, Apple Disability community | Underserved + high evangelism — if the project has *any* accessibility wedge, prioritize this. Usually the cleanest wedge for products that genuinely help. |
-| **Language-immersion creators** | r/LanguageLearning, r/learnjapanese, r/Korean, r/ChineseLanguage, AJATT / Refold / MIA / TheMoeWay communities | Only if product genuinely supports their workflow (real-time translation, ambient listening, transcript analysis). |
-| **ADHD / body-doubling community** | r/ADHD, r/getdisciplined, ADHD-specific Twitter | Only if product offers a body-doubling or voice-first thinking angle. |
-| **Sales/CS thought leaders** | LinkedIn, r/sales, r/customersuccess | Only if product has a live-meeting or coaching angle. |
-| **Competitor-switcher threads** | Forum Pulse search for "alternative to {competitor}" | The author + 50 commenters of a thread complaining about a competitor are a pre-qualified shortlist. |
+| **Founder peers** (Tier S — interview, not pitch) | `source: "github"` for peer projects (owners are the leads) + `source: "reddit"` in r/macapps, r/SaaS, r/indiehackers + `source: "hn"` for Show HN | github stars + recency are your signal. Top-10 repos for the competitor's category = top-10 founder peers. |
+| **AI-tools discovery channels / newsletter writers** | `source: "exa"` (semantic search beats keyword here) | Query: `"best {niche} newsletter {current_year}"`, `"top AI tools newsletter"`. Then cross-reference with project's specific angle (novelty? open source? agentic?). |
+| **Reddit power users in target subreddits** | `source: "reddit"`, one call per target subreddit | Look at commenters in threads about your competitors. `get_user_activity` to vet before adding to shortlist. |
+| **HN regulars discussing competitors** | `source: "hn"` | Search each competitor name. "I switched from X to Y because..." pattern is gold. |
+| **Niche YouTubers** | `source: "youtube"` directly | Query the actual niche: `"AJATT Japanese immersion"`, `"Mac power user tips"`, `"voice assistant accessibility"`. View count is your signal; channel name + URL go straight in the deck. |
+| **Niche podcast hosts** | `source: "exa"` for round-ups, then YouTube for trailers | Query: `"top {niche} podcasts {current_year}"`. |
+| **Accessibility advocates** | `source: "reddit"` r/Blind, r/Accessibility, r/RSI, r/disability + `source: "github"` for accessibility-tagged repos | Underserved + high evangelism — if the project has *any* accessibility wedge, prioritize this. Usually the cleanest wedge for products that genuinely help. |
+| **Language-immersion creators** | `source: "youtube"` for actual creators + `source: "reddit"` r/LanguageLearning, r/learnjapanese, AJATT/Refold/MIA communities | Only if product genuinely supports their workflow (real-time translation, ambient listening, transcript analysis). |
+| **ADHD / body-doubling community** | `source: "reddit"` r/ADHD, r/getdisciplined | Only if product offers a body-doubling or voice-first thinking angle. |
+| **Sales/CS thought leaders** | `source: "exa"` for round-ups + `source: "reddit"` r/sales, r/customersuccess | Only if product has a live-meeting or coaching angle. |
+| **Competitor-switcher threads** | `source: "reddit"` in target subreddits + `source: "hn"` | Search "alternative to {competitor}". The author + commenters of a complaint thread are a pre-qualified shortlist. |
+| **GitHub stargazers of a peer project** | (CLI only — call via the GitHub stargazers helper) | The rarest, most actionable amplifier signal we can get: verified-interested humans with public profiles. Use sparingly — best for "we found 5 perfect peer repos, who stars all of them?" |
 
 ### Step 3 — Execute searches in parallel
 
